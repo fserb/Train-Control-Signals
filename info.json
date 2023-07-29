@@ -1,11 +1,11 @@
 {
-  "name": "Train_Control_Signals",
+  "name": "Train_Control_Signals_SE",
   "version": "1.0.6",
-  "title": "Train Control Signals",
-  "author": "Klonan",
+  "title": "Train Control Signals SE",
+  "author": "fserb",
   "contact": "",
   "homepage": "",
-  "description": "Simple ways of controlling trains.",
+  "description": "Simple ways of controlling trains. Supports SE",
   "dependencies": [
     "base >= 1.1.7",
     "? space-exploration >= 0.6.0"
