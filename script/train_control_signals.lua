@@ -8,6 +8,10 @@ local depot_signal_disabled = "%[virtual%-signal=depot%-signal%-disabled]"
 
 local skip_signal = "%[virtual%-signal=skip%-signal]"
 
+-- space exploration support could break if se mod ever changes the name of the
+-- elevator station name
+local space_elevator_signal = "%[img=entity/se%-space%-elevator]"
+
 local train_needs_refueling = function(train)
   local locomotives = train.locomotives
   for k, movers in pairs (locomotives) do
@@ -38,6 +42,14 @@ end
 
 local station_is_disabled = function(station)
   return station:find(skip_signal)
+end
+
+local station_is_control = function(station)
+  return station:find(depot_signal) or station:find(fuel_signal)
+end
+
+local station_is_space_elevator = function(station)
+  return station:find(space_elevator_signal)
 end
 
 local station_is_open_depot = function(station)
@@ -217,6 +229,58 @@ local on_train_schedule_changed = function(event)
   end
 end
 
+-- If station after elevator is a depot/fuel station, go to a temporary station at the elevator exit
+-- so that the depot/fuel enable/disable logic can be run for the newly created train.
+local on_train_teleport_started_event = function(event)
+  local train = event.train
+  if not (train and train.valid) then return end
+
+  local schedule = train.schedule
+  if not schedule then return end
+
+  local current = schedule.current
+  local index = current
+  local control_station = 0
+  while true do
+    index = index - 1
+    if index == 0 then index = #schedule.records end
+    if index == current then break end
+
+    local station = schedule.records[index].station
+    if station_is_control(station) then
+      control_station = index
+    elseif station_is_space_elevator(station) then
+      if control_station > 0 then
+        -- when using the space elevator the train is created on a curved rail inside the space elevator
+        -- depending on the orientation of the elevator, the exit is either on the front or back of the current rail.
+        -- to find out which one it is, we have to check each end if it is connected to another rail and if one is found,
+        -- then the elevator exit is added as a temporary waypoint so that the schedule can be reevaluated by TCS
+        local front_rail = train.front_rail
+        for _, elevator_direction in pairs({"front", "back"}) do
+          local elevator_exit = front_rail.get_rail_segment_end(defines.rail_direction[elevator_direction])
+          for _, connection_direction in pairs({"straight", "left", "right"}) do
+            if elevator_exit.get_connected_rail{rail_direction=defines.rail_direction.front, rail_connection_direction=defines.rail_connection_direction[connection_direction]} then
+              table.insert(schedule.records, control_station, {
+                rail = elevator_exit,
+                temporary = true,
+                wait_conditions = {{
+                  type = "time",
+                  compare_type = "or",
+                  ticks = 1
+                }}
+              })
+              train.schedule = schedule
+              train.go_to_station(control_station)
+              return
+            end
+          end
+        end
+      end
+      break
+    end
+  end
+end
+
 local lib = {}
 
 lib.events =
@@ -226,7 +290,18 @@ lib.events =
   [defines.events.on_train_schedule_changed] = on_train_schedule_changed,
 }
 
+local add_se_events = function()
+  if script.active_mods["space-exploration"] then
+    script.on_event(remote.call("space-exploration", "get_on_train_teleport_started_event"), on_train_teleport_started_event)
+  end
+end
+
+lib.on_load = function()
+  add_se_events()
+end
+
 lib.on_init = function()
+  add_se_events()
 end
 
 lib.on_configuration_changed = function()
