@@ -3,6 +3,7 @@ Version: 1.0.6
 Date: 2021-07-31
   Changes:
     - More precise fix for skipping depot stations in some circumstances.
+    - Adds support for Space Exploration
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.5
 Date: 2021-07-25
